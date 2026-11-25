@@ -6,13 +6,16 @@ entire pointless meeting -- to /output/entry.txt.
 
 First draft: "This meeting could have been an email." True, and
 everyone in the room has thought it -- but it stops at the cliche
-instead of landing a joke. It needs a second step, a deflation of
-the email itself, to earn the laugh. To be revised.
+instead of landing a joke. Revised with a second step that deflates
+the email itself: the meeting becomes an email, the email becomes a
+shrug, and the shrug is the sting -- even the replacement needed no
+words. That escalation is the joke, and it kills the meeting twice
+over: nobody can justify the hour once even the email was too much.
 """
 
 import os
 
-ENTRY = "This meeting could have been an email."
+ENTRY = "This meeting could have been an email, and the email could have been a shrug."
 
 MAX_CHARS = 200
 # The gate counts characters, but the file is bytes on disk: cap both.
