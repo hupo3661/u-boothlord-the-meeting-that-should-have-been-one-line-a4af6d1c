@@ -17,12 +17,18 @@ import os
 
 ENTRY = "This meeting could have been an email, and the email could have been a shrug."
 
+# The entry is one fixed sentence; pin its exact length so any
+# accidental edit to the wording fails loudly instead of shipping.
+EXPECTED_CHARS = 77
+
 MAX_CHARS = 200
 # The gate counts characters, but the file is bytes on disk: cap both.
 # 200 chars of UTF-8 can be up to 800 bytes; reject anything whose
 # encoded form is not exactly the text re-decoded, so no mojibake or
 # stray BOM can slip a different line past the character check.
 MAX_BYTES = MAX_CHARS * 4
+
+TRAILING_NEWLINE = "\n"
 
 
 def _output_path() -> str:
@@ -31,11 +37,28 @@ def _output_path() -> str:
     return os.path.join(out_dir, "entry.txt")
 
 
-def _check_single_line(entry: str) -> None:
+def _check_not_blank(entry: str) -> None:
     assert entry.strip(), "entry must not be only whitespace"
+
+
+def _check_no_padding(entry: str) -> None:
     assert entry == entry.strip(), "entry must not pad its line"
+
+
+def _check_single_line(entry: str) -> None:
+    _check_not_blank(entry)
+    _check_no_padding(entry)
     assert "\n" not in entry and "\r" not in entry, (
         "entry must be a single line"
+    )
+
+
+def _check_exact_length(entry: str) -> None:
+    assert len(entry) == EXPECTED_CHARS, (
+        f"entry is {len(entry)} chars, expected {EXPECTED_CHARS}"
+    )
+    assert len(entry.encode("utf-8")) == EXPECTED_CHARS, (
+        "entry must be pure ASCII at the pinned length"
     )
 
 
@@ -51,25 +74,38 @@ def _check_length(entry: str) -> bytes:
     return encoded
 
 
-def validate(entry: str) -> None:
-    """Fail loudly if the entry breaks the gate rules."""
+def validate(entry: str) -> bytes:
+    """Fail loudly if the entry breaks the gate rules.
+
+    Returns the UTF-8 encoding of the entry for the writer to use,
+    so validation and writing can never disagree on the bytes.
+    """
     _check_single_line(entry)
-    _check_length(entry)
+    _check_exact_length(entry)
+    return _check_length(entry)
+
+
+def _write_entry(output_path: str, encoded: bytes) -> None:
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "wb") as f:
+        f.write(encoded + TRAILING_NEWLINE.encode("utf-8"))
+
+
+def _verify_written(output_path: str, encoded: bytes) -> None:
+    """Re-read what was written and confirm it matches, byte for byte."""
+    with open(output_path, "rb") as f:
+        written_bytes = f.read()
+    assert written_bytes == encoded + TRAILING_NEWLINE.encode("utf-8"), (
+        "written entry does not match ENTRY byte for byte"
+    )
+    validate(written_bytes.decode("utf-8").removesuffix(TRAILING_NEWLINE))
 
 
 def main() -> None:
-    validate(ENTRY)
+    encoded = validate(ENTRY)
     output_path = _output_path()
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(ENTRY + "\n")
-    # Re-read what was written and confirm it matches, byte for byte.
-    with open(output_path, "rb") as f:
-        written_bytes = f.read()
-    assert written_bytes == (ENTRY + "\n").encode("utf-8"), (
-        "written entry does not match ENTRY byte for byte"
-    )
-    validate(written_bytes.decode("utf-8").rstrip("\n"))
+    _write_entry(output_path, encoded)
+    _verify_written(output_path, encoded)
     print(f"wrote {len(ENTRY)} chars to {output_path}")
 
 
